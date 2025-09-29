@@ -1,4 +1,5 @@
-<!-- Copyright 2022 Google LLC
+<!--
+Copyright 2022 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -10,88 +11,183 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License. -->
+limitations under the License.
+-->
 
-# Use Terraform to deploy Online Boutique on a GKE cluster
+# Deploy Online Boutique on AWS EKS using Terraform
 
-This page walks you through the steps required to deploy the [Online Boutique](https://github.com/GoogleCloudPlatform/microservices-demo) sample application on a [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) cluster using Terraform.
+This project is a refactored version of the [Online Boutique](https://github.com/GoogleCloudPlatform/microservices-demo) sample application originally designed for Google Kubernetes Engine (GKE). It has been adapted to deploy infrastructure on **Amazon Web Services (AWS)** using **Terraform** and **Amazon EKS**.
+
+## Refactor Summary
+
+- Original repo: [`GoogleCloudPlatform/microservices-demo`](https://github.com/GoogleCloudPlatform/microservices-demo)
+- Refactored to use:
+  - AWS EKS instead of GKE
+  - AWS VPC, subnets, IAM roles, and ECR
+  - Modular Terraform files (`main.tf`, `variables.tf`, `outputs.tf`)
+  - Infrastructure as Code (IaC) best practices
 
 ## Prerequisites
 
-1. [Create a new project or use an existing project](https://cloud.google.com/resource-manager/docs/creating-managing-projects#console) on Google Cloud, and ensure [billing is enabled](https://cloud.google.com/billing/docs/how-to/verify-billing-enabled) on the project.
+1. **AWS Account** with programmatic access (IAM user or role)
+2. **AWS CLI** configured with credentials:
+   ```powershell
+   aws configure
+   ```
+3. **Terraform** installed (v1.6+ recommended)
+4. **kubectl** installed for interacting with EKS
 
-## Deploy the sample application
+**Note**: All required IAM roles are automatically created by Terraform - no manual IAM setup required!
 
-1. Clone the Github repository.
+## Deploy the Complete Solution
 
-    ```bash
-    git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
-    ```
+### Step 1: Deploy Infrastructure
 
-1. Move into the `terraform/` directory which contains the Terraform installation scripts.
+1. Navigate to the terraform directory:
+   ```powershell
+   cd terraform
+   ```
 
-    ```bash
-    cd microservices-demo/terraform
-    ```
+2. Initialize Terraform:
+   ```powershell
+   terraform init
+   ```
 
-1. Open the `terraform.tfvars` file and replace `<project_id_here>` with the [GCP Project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects?hl=en#identifying_projects) for the `gcp_project_id` variable.
+3. Preview the infrastructure:
+   ```powershell
+   terraform plan
+   ```
 
-1. (Optional) If you want to provision a [Google Cloud Memorystore (Redis)](https://cloud.google.com/memorystore) instance, you can change the value of `memorystore = false` to `memorystore = true` in this `terraform.tfvars` file.
-
-1. Initialize Terraform.
-
-    ```bash
-    terraform init
-    ```
-
-1. See what resources will be created.
-
-    ```bash
-    terraform plan
-    ```
-
-1. Create the resources and deploy the sample.
-
-    ```bash
-    terraform apply
-    ```
-
-    1. If there is a confirmation prompt, type `yes` and hit Enter/Return.
-
-    Note: This step can take about 10 minutes. Do not interrupt the process.
-
-Once the Terraform script has finished, you can locate the frontend's external IP address to access the sample application.
-
-- Option 1:
-
-    ```bash
-    kubectl get service frontend-external | awk '{print $4}'
-    ```
-
-- Option 2: On Google Cloud Console, navigate to "Kubernetes Engine" and then "Services & Ingress" to locate the Endpoint associated with "frontend-external".
-
-## Clean up
-
-To avoid incurring charges to your Google Cloud account for the resources used in this sample application, either delete the project that contains the resources, or keep the project and delete the individual resources.
-
-To remove the individual resources created for by Terraform without deleting the project:
-
-1. Navigate to the `terraform/` directory.
-
-1. Set `deletion_protection` to `false` for the `google_container_cluster` resource (GKE cluster).
-
-   ```bash
-   # Uncomment the line: "deletion_protection = false"
-   sed -i "s/# deletion_protection/deletion_protection/g" main.tf
-
-   # Re-apply the Terraform to update the state
+4. Apply the configuration:
+   ```powershell
    terraform apply
    ```
+   Type `yes` when prompted.
 
-1. Run the following command:
+5. Terraform will output:
+   - EKS cluster name and endpoint
+   - ECR repository URLs
+   - IAM role ARNs
 
-   ```bash
-   terraform destroy
+### Step 2: Deploy the Application
+
+1. Configure kubectl to connect to your EKS cluster:
+   ```powershell
+   aws eks update-kubeconfig --region us-east-2 --name online-boutique-cluster
    ```
 
-   1. If there is a confirmation prompt, type `yes` and hit Enter/Return.
+2. Verify cluster connectivity:
+   ```powershell
+   kubectl get nodes
+   ```
+
+3. Deploy all microservices using kustomize:
+   ```powershell
+   kubectl apply -k kustomize/
+   ```
+
+4. Create the LoadBalancer service for external access:
+   ```powershell
+   kubectl apply -f kustomize/base/frontend.yaml
+   ```
+
+5. Get the application URL:
+   ```powershell
+   kubectl get service frontend-external
+   ```
+   The `EXTERNAL-IP` column will show your LoadBalancer URL.
+
+### Step 3: Access Your Application
+
+Visit the LoadBalancer URL in your browser to see the Online Boutique e-commerce demo!
+
+## Clean Up
+
+**Important**: Always delete Kubernetes resources before destroying infrastructure!
+
+### Step 1: Delete Application
+```powershell
+kubectl delete -k kustomize/
+```
+
+### Step 2: Wait for LoadBalancer Cleanup
+Wait 2-3 minutes for AWS to clean up the LoadBalancer resources.
+
+### Step 3: Destroy Infrastructure
+```powershell
+terraform destroy
+```
+Type `yes` when prompted.
+
+This will remove:
+* EKS cluster and node groups
+* VPC, subnets, and networking components
+* ECR repositories
+* IAM roles and policies
+* All associated AWS resources
+
+## Architecture Overview
+
+**Infrastructure Components:**
+- **EKS Cluster**: Kubernetes control plane
+- **Worker Nodes**: t3.small instances with autoscaling
+- **VPC**: Custom VPC with public/private subnets across 2 AZs
+- **ECR**: Container registries for all microservices
+- **LoadBalancer**: AWS ELB for external access
+
+**Application Components:**
+- **12 Microservices**: Frontend, cart, checkout, payment, etc.
+- **Redis**: In-cluster cache for cart service
+- **gRPC Communication**: Inter-service communication
+- **Load Generator**: Simulates realistic traffic
+
+## Troubleshooting
+
+**Common Issues:**
+
+1. **Pods in ImagePullBackOff**: Uses Google's pre-built images by default
+2. **LoadBalancer Pending**: Check security groups and subnet tags
+3. **Permission Errors**: Verify AWS CLI credentials and region
+4. **Terraform Destroy Fails**: Ensure all Kubernetes LoadBalancer services are deleted first
+
+**Useful Commands:**
+```powershell
+# Check pod status
+kubectl get pods
+
+# View pod logs
+kubectl logs deployment/frontend
+
+# Check services
+kubectl get services
+
+# Scale deployment
+kubectl scale deployment frontend --replicas=3
+```
+
+## Container Images
+
+**Current Setup**: Uses Google's pre-built container images from Google Artifact Registry. This allows immediate deployment without building custom images.
+
+**Custom Images** (Optional): 
+If you want to build and use your own container images:
+
+1. Install Docker Desktop
+2. Authenticate with ECR:
+   ```powershell
+   aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <ecr-url>
+   ```
+3. Build and push images for each microservice in `src/` directory
+4. Update Kubernetes manifests to use your ECR image URLs
+
+## Notes
+
+* **Cost Optimization**: EKS cluster costs ~$0.10/hour + EC2 nodes (~$0.04/hour for t3.small)
+* **Production Ready**: Includes autoscaling, security groups, and proper IAM roles
+* **Reproducible**: Complete Infrastructure as Code with Terraform
+* **Educational**: Great for learning microservices, Kubernetes, and AWS
+* **Modular**: Easy to extend with monitoring, CI/CD, or additional services
+
+For detailed commands and troubleshooting, see `QUICK_REFERENCE.md` in the root directory.
+
+
