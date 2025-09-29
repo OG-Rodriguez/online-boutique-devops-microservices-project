@@ -1,0 +1,106 @@
+name: CD - Deploy Online Boutique
+
+on:
+  push:
+    branches: [ "main" ]
+    # Optional: limit to paths that matter for deployment
+    # paths:
+    #   - 'helm-chart/**'
+    #   - 'src/**'
+
+permissions:
+  id-token: write   # For OIDC to AWS (recommended over static keys)
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  CLUSTER_NAME: online-boutique-cluster
+  HELM_RELEASE: onlineboutique
+  HELM_CHART_PATH: helm-chart
+
+jobs:
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Retrieve short SHA to use as image tag; CI pipeline must have pushed images with this tag.
+      - name: Compute image tag
+        id: meta
+        run: |
+          echo "tag=${GITHUB_SHA::12}" >> $GITHUB_OUTPUT
+
+      # Configure AWS credentials via OIDC (preferred). Create IAM role with trust for GitHub.
+      - name: Export environment variables
+        run: |
+          echo "ECR_REGISTRY=${{ secrets.ECR_REGISTRY }}" >> $GITHUB_ENV
+          echo "ROLE_ARN=${{ secrets.AWS_GITHUB_ROLE_ARN }}" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          role-session-name: github-actions-cd
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
+
+      - name: Verify cluster access
+        run: |
+          kubectl get nodes
+          kubectl get ns
+
+      # Optional: ensure the ECR repos exist (they should from Terraform). Could also 'docker pull' to verify.
+      - name: Show expected image tags
+        run: |
+          echo "Using image tag: ${{ steps.meta.outputs.tag }}"
+
+      - name: Verify images exist in ECR
+        run: |
+          set -e
+          TAG="${{ steps.meta.outputs.tag }}"
+          REG="$ECR_REGISTRY"
+          SERVICES=(adservice cartservice checkoutservice currencyservice emailservice frontend loadgenerator paymentservice productcatalogservice recommendationservice shippingservice shoppingassistantservice)
+          for svc in "${SERVICES[@]}"; do
+            echo "Checking $REG/$svc:$TAG"
+            aws ecr describe-images --repository-name "$svc" --image-ids imageTag="$TAG" --region "${{ env.AWS_REGION }}" > /dev/null
+          done
+          echo "All images present in ECR"
+
+      # Helm upgrade/install
+      - name: Deploy Helm chart
+        run: |
+          # The chart uses a single global repository/tag pattern values.images.repository / values.images.tag
+          # CI must have pushed images like: <repository>/<service>:<tag>
+          helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
+            --namespace online-boutique --create-namespace \
+            --set images.repository="$ECR_REGISTRY" \
+            --set images.tag=${{ steps.meta.outputs.tag }} \
+            --atomic --timeout 10m
+
+      - name: Post-deploy status
+        run: |
+          kubectl get pods -n online-boutique -o wide
+          kubectl get svc -n online-boutique
+
+      - name: Smoke test - wait for core deployments
+        run: |
+          set -e
+          kubectl rollout status deployment/frontend -n online-boutique --timeout=300s
+          kubectl rollout status deployment/productcatalogservice -n online-boutique --timeout=300s
+          kubectl rollout status deployment/cartservice -n online-boutique --timeout=300s
+
+      # (Optional) Rollback logic placeholder
+      - name: Capture revision
+        run: helm history "$HELM_RELEASE" -n online-boutique
+
+# Notes:
+# - Ensure your CI workflow builds & pushes all service images to the repository specified in values.yaml
+#   with the tag identical to the short SHA used here. Example tag logic must match: ${GITHUB_SHA::12}.
+# - Required secret: AWS_GITHUB_ROLE_ARN (an IAM role ARN with EKS + ECR read/list + kubectl permissions via aws-auth)
+# - If you change the tag derivation, update both CI and this CD workflow.
