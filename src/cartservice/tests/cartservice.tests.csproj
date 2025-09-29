@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\cartservice.csproj" />
+    <!-- Fixed path: tests folder is already inside cartservice directory -->
+    <ProjectReference Include="..\cartservice.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,85 @@
+# -------------------------------
+# GitHub Actions CI Pipeline
+# -------------------------------
+# This workflow builds and pushes Docker images for all microservices
+# in the 'src/' directory to AWS ECR upon code changes.
+
+name: CI Pipeline - Build & Push All Microservices
+
+# ----------------------------------------
+# Trigger the workflow on:
+# - Any push to 'main' or 'develop' branches
+# - Any pull request targeting 'main' or 'develop'
+# ----------------------------------------
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# ----------------------------------------
+# Global environment variables
+# ----------------------------------------
+env:
+  AWS_REGION: us-east-2
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}  # e.g. 094121082922.dkr.ecr.us-east-2.amazonaws.com
+
+# ----------------------------------------
+# Define a single job: build-and-push
+# ----------------------------------------
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest  # Use latest Ubuntu runner provided by GitHub
+
+    steps:
+      # Step 1: Checkout the repository code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Docker Buildx (supports multi-arch builds and advanced features)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Step 3: Configure AWS credentials using GitHub secrets
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Step 4: Authenticate Docker to ECR
+      - name: Authenticate Docker to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      # Step 5: Loop through each microservice folder in src/, build and push to ECR
+      - name: Build and push all microservices
+        run: |
+          # Use first 12 characters of commit SHA for tagging (must match CD workflow)
+          COMMIT_SHA12=${GITHUB_SHA::12}
+          echo "Using tag: $COMMIT_SHA12"
+
+          # Loop through each subdirectory in 'src/'
+          for dir in src/*/; do
+            service=$(basename "$dir")
+            sha_image="$ECR_REGISTRY/$service:$COMMIT_SHA12"
+            latest_image="$ECR_REGISTRY/$service:latest"
+
+            echo "Building $service..."
+            docker build -t "$sha_image" "$dir"
+
+            # Tag also as latest for convenience (optional)
+            docker tag "$sha_image" "$latest_image"
+
+            echo "Pushing $sha_image"
+            docker push "$sha_image"
+            echo "Pushing $latest_image"
+            docker push "$latest_image"
+          done
+
+          echo "Images pushed with tags: $COMMIT_SHA12 and latest"

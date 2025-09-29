@@ -16,4 +16,10 @@
   <ItemGroup>
     <Protobuf Include="protos\Cart.proto" GrpcServices="Both" />
   </ItemGroup>
+
+  <!-- Exclude test sources (present under tests/) from being compiled into the main service assembly -->
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <None Include="tests\**\*.cs" />
+  </ItemGroup>
 </Project>
