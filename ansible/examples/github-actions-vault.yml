@@ -1,0 +1,55 @@
+name: Deploy with Vault Secrets
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Import Secrets from Vault
+      uses: hashicorp/vault-action@v2
+      with:
+        url: ${{ secrets.VAULT_ADDR }}
+        token: ${{ secrets.VAULT_TOKEN }}
+        secrets: |
+          secret/data/webapp db_password | DATABASE_PASSWORD ;
+          secret/data/webapp api_key | API_KEY ;
+          secret/data/webapp jwt_secret | JWT_SECRET
+
+    - name: Verify secrets are available
+      run: |
+        echo "Database password length: ${#DATABASE_PASSWORD}"
+        echo "API key length: ${#API_KEY}"
+        echo "JWT secret length: ${#JWT_SECRET}"
+        # Don't echo the actual values for security
+
+    - name: Build Docker image
+      run: |
+        docker build -t myapp:${{ github.sha }} .
+
+    - name: Deploy to staging
+      run: |
+        # Use the secrets in your deployment
+        echo "Deploying with database password: ${DATABASE_PASSWORD:0:3}***"
+        # Your deployment commands here
+        # kubectl create secret generic app-secrets \
+        #   --from-literal=db-password="$DATABASE_PASSWORD" \
+        #   --from-literal=api-key="$API_KEY" \
+        #   --from-literal=jwt-secret="$JWT_SECRET"
+
+    - name: Run tests
+      env:
+        DATABASE_PASSWORD: ${{ env.DATABASE_PASSWORD }}
+        API_KEY: ${{ env.API_KEY }}
+        JWT_SECRET: ${{ env.JWT_SECRET }}
+      run: |
+        # Run your tests with secrets
+        npm test

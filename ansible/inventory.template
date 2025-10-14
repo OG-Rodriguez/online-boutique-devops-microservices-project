@@ -1,0 +1,13 @@
+# Ansible Inventory Template for Terraform Integration
+# This file will be automatically updated by the deployment script
+
+[vault_servers]
+# This will be populated by Terraform outputs
+vault-server ansible_host=TERRAFORM_VAULT_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/TERRAFORM_KEY_NAME.pem
+
+[vault_servers:vars]
+ansible_python_interpreter=/usr/bin/python3
+
+# Dynamic inventory variables (populated by deployment script)
+# vault_ui_url=TERRAFORM_VAULT_UI_URL
+# vault_api_url=TERRAFORM_VAULT_API_URL
