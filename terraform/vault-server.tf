@@ -100,7 +100,7 @@ resource "aws_instance" "vault" {
   }
 
   # User data script for basic setup (optional)
-  user_data = base64encode(templatefile("${path.module}/vault-user-data.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/vault-user-data.sh", {
     vault_version = var.vault_version
   }))
 
