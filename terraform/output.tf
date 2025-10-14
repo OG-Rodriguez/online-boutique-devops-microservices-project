@@ -43,3 +43,43 @@ output "spot_node_group_name" {
   description = "Name of the spot node group (empty if disabled)"
   value       = var.enable_spot_node_group ? aws_eks_node_group.spot[0].node_group_name : ""
 }
+
+# ---------------------------
+# Vault Server Outputs
+# ---------------------------
+
+output "vault_server_ip" {
+  description = "Public IP address of the Vault server"
+  value       = var.vault_use_elastic_ip ? aws_eip.vault[0].public_ip : aws_instance.vault.public_ip
+}
+
+output "vault_server_private_ip" {
+  description = "Private IP address of the Vault server"
+  value       = aws_instance.vault.private_ip
+}
+
+output "vault_server_dns" {
+  description = "Public DNS name of the Vault server"
+  value       = aws_instance.vault.public_dns
+}
+
+output "vault_server_id" {
+  description = "EC2 instance ID of the Vault server"
+  value       = aws_instance.vault.id
+}
+
+output "vault_ui_url" {
+  description = "URL to access Vault UI"
+  value       = "http://${var.vault_use_elastic_ip ? aws_eip.vault[0].public_ip : aws_instance.vault.public_ip}:8200"
+}
+
+output "vault_api_url" {
+  description = "URL for Vault API access"
+  value       = "http://${var.vault_use_elastic_ip ? aws_eip.vault[0].public_ip : aws_instance.vault.public_ip}:8200"
+}
+
+output "vault_ssh_command" {
+  description = "SSH command to connect to Vault server"
+  value       = "ssh -i ~/.ssh/${var.vault_key_name}.pem ubuntu@${var.vault_use_elastic_ip ? aws_eip.vault[0].public_ip : aws_instance.vault.public_ip}"
+  sensitive   = true
+}
