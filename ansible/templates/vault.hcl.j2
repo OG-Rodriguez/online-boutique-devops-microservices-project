@@ -1,0 +1,22 @@
+ui = true
+disable_mlock = true
+
+storage "file" {
+  path = "{{ vault_data_dir }}"
+}
+
+listener "tcp" {
+  address     = "0.0.0.0:8200"
+  tls_disable = 1
+}
+
+api_addr = "http://{{ ansible_default_ipv4.address }}:8200"
+cluster_addr = "https://{{ ansible_default_ipv4.address }}:8201"
+
+# Log level
+log_level = "Info"
+
+# Log to file
+log_file = "{{ vault_log_dir }}/vault.log"
+log_rotate_duration = "24h"
+log_rotate_max_files = 5

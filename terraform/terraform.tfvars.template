@@ -1,0 +1,46 @@
+# ---------------------------
+# Terraform Variable Values Template
+# ---------------------------
+# Copy this file to terraform.tfvars and replace placeholder values
+
+# IAM role ARN for EKS cluster control plane
+# Replace <ACCOUNT_ID> with your 12-digit AWS account ID
+# Replace <ROLE_NAME> with your EKS cluster role name
+eks_role_arn = "arn:aws:iam::<ACCOUNT_ID>:role/<ROLE_NAME>"
+
+# Uncomment and override defaults as needed:
+# aws_region = "us-east-2"
+# vpc_cidr   = "10.0.0.0/16"
+
+# Explicit node group sizing to satisfy EKS constraints (min ≤ desired ≤ max)
+min_size         = 1
+desired_capacity = 2
+max_size         = 3
+
+# Baseline instance type suitable for Online Boutique
+node_instance_type = "t3.small"
+
+# Ensure free tier override is off so t3.small is respected
+free_tier_mode = false
+
+# ---------------------------
+# Vault Server Configuration
+# ---------------------------
+
+# Vault server instance type (t3.micro is free tier eligible)
+vault_instance_type = "t3.micro"
+
+# Vault server root volume size in GB
+vault_disk_size = 20
+
+# HashiCorp Vault version to install
+vault_version = "1.15.2"
+
+# SSH key name for Vault server access
+vault_key_name = "vault-server-key"
+
+# Public key for Vault server SSH access (will be populated by deployment script)
+# vault_public_key = ""
+
+# Whether to use Elastic IP for Vault server (recommended)
+vault_use_elastic_ip = true

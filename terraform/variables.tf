@@ -159,3 +159,43 @@ variable "spot_max_size" {
   type        = number
   default     = 3
 }
+
+# ---------------------------
+# Vault Server Variables
+# ---------------------------
+
+variable "vault_instance_type" {
+  description = "EC2 instance type for Vault server"
+  type        = string
+  default     = "t3.micro"  # Free tier eligible
+}
+
+variable "vault_disk_size" {
+  description = "Root volume size for Vault server (GB)"
+  type        = number
+  default     = 20
+}
+
+variable "vault_version" {
+  description = "HashiCorp Vault version to install"
+  type        = string
+  default     = "1.15.2"
+}
+
+variable "vault_key_name" {
+  description = "Name for the EC2 key pair for Vault server SSH access"
+  type        = string
+  default     = "vault-server-key"
+}
+
+variable "vault_public_key" {
+  description = "Public key content for Vault server SSH access"
+  type        = string
+  # This should be provided via terraform.tfvars or environment variable
+}
+
+variable "vault_use_elastic_ip" {
+  description = "Whether to assign an Elastic IP to the Vault server"
+  type        = bool
+  default     = true
+}
